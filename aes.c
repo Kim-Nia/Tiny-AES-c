@@ -35,7 +35,6 @@ NOTE:   String length must be evenly divisible by 16byte (str_len % 16 == 0)
 /*****************************************************************************/
 /* Includes:                                                                 */
 /*****************************************************************************/
-#include <stdint.h>
 #include <string.h> // CBC mode, for memset
 #include "aes.h"
 
@@ -44,34 +43,35 @@ NOTE:   String length must be evenly divisible by 16byte (str_len % 16 == 0)
 /*****************************************************************************/
 // The number of columns comprising a state in AES. This is a constant in AES. Value=4
 #define Nb 4
-
-#if defined(AES256) && (AES256 == 1)
-    #define Nk 8
-    #define Nr 14
-#elif defined(AES192) && (AES192 == 1)
-    #define Nk 6
-    #define Nr 12
-#else
-    #define Nk 4        // The number of 32 bit words in a key.
-    #define Nr 10       // The number of rounds in AES Cipher.
-#endif
-
-// jcallan@github points out that declaring Multiply as a function 
-// reduces code size considerably with the Keil ARM compiler.
-// See this link for more information: https://github.com/kokke/tiny-AES-C/pull/3
-#ifndef MULTIPLY_AS_A_FUNCTION
-  #define MULTIPLY_AS_A_FUNCTION 0
-#endif
-
-
+#define Nk 4        // The number of 32 bit words in a key.
+#define Nr 10       // The number of rounds in AES Cipher.
 
 
 /*****************************************************************************/
 /* Private variables:                                                        */
 /*****************************************************************************/
-// state - array holding the intermediate results during decryption.
-typedef uint8_t state_t[4][4];
 
+
+
+#ifdef TEST_AES_MATH
+
+  static const uint8_t plaintext[64] = {
+  //0     1    2      3     4    5     6     7      8    9     A      B    C     D     E     F
+  0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96, 0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a,
+  0xae, 0x2d, 0x8a, 0x57, 0x1e, 0x03, 0xac, 0x9c, 0x9e, 0xb7, 0x6f, 0xac, 0x45, 0xaf, 0x8e, 0x51,
+  0x30, 0xc8, 0x1c, 0x46, 0xa3, 0x5c, 0xe4, 0x11, 0xe5, 0xfb, 0xc1, 0x19, 0x1a, 0x0a, 0x52, 0xef,
+  0xf6, 0x9f, 0x24, 0x45, 0xdf, 0x4f, 0x9b, 0x17, 0xad, 0x2b, 0x41, 0x7b, 0xe6, 0x6c, 0x37, 0x10 };
+  
+  static const uint8_t ciphertext[64] = {
+  //0     1    2      3     4    5     6     7      8    9     A      B    C     D     E     F
+  0x76, 0x49, 0xab, 0xac, 0x81, 0x19, 0xb2, 0x46, 0xce, 0xe9, 0x8e, 0x9b, 0x12, 0xe9, 0x19, 0x7d,
+  0x50, 0x86, 0xcb, 0x9b, 0x50, 0x72, 0x19, 0xee, 0x95, 0xdb, 0x11, 0x3a, 0x91, 0x76, 0x78, 0xb2,
+  0x73, 0xbe, 0xd6, 0xb8, 0xe3, 0xc1, 0x74, 0x3b, 0x71, 0x16, 0xe6, 0x9e, 0x22, 0x22, 0x95, 0x16,
+  0x3f, 0xf1, 0xca, 0xa1, 0x68, 0x1f, 0xac, 0x09, 0x12, 0x0e, 0xca, 0x30, 0x75, 0x86, 0xe1, 0xa7 };
+  
+  static uint8_t testbuffer[64] = {0};
+
+#endif
 
 
 // The lookup-tables are marked const so they can be placed in read-only storage instead of RAM
@@ -119,15 +119,6 @@ static const uint8_t rsbox[256] = {
 static const uint8_t Rcon[11] = {
   0x8d, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36 };
 
-/*
- * Jordan Goulder points out in PR #12 (https://github.com/kokke/tiny-AES-C/pull/12),
- * that you can remove most of the elements in the Rcon array, because they are unused.
- *
- * From Wikipedia's article on the Rijndael key schedule @ https://en.wikipedia.org/wiki/Rijndael_key_schedule#Rcon
- * 
- * "Only the first some of these constants are actually used – up to rcon[10] for AES-128 (as 11 round keys are needed), 
- *  up to rcon[8] for AES-192, up to rcon[7] for AES-256. rcon[0] is not used in AES algorithm."
- */
 
 
 /*****************************************************************************/
@@ -202,18 +193,7 @@ static void KeyExpansion(uint8_t* RoundKey, const uint8_t* Key)
 
       tempa[0] = tempa[0] ^ Rcon[i/Nk];
     }
-#if defined(AES256) && (AES256 == 1)
-    if (i % Nk == 4)
-    {
-      // Function Subword()
-      {
-        tempa[0] = getSBoxValue(tempa[0]);
-        tempa[1] = getSBoxValue(tempa[1]);
-        tempa[2] = getSBoxValue(tempa[2]);
-        tempa[3] = getSBoxValue(tempa[3]);
-      }
-    }
-#endif
+
     j = i * 4; k=(i - Nk) * 4;
     RoundKey[j + 0] = RoundKey[k + 0] ^ tempa[0];
     RoundKey[j + 1] = RoundKey[k + 1] ^ tempa[1];
@@ -226,7 +206,6 @@ void AES_init_ctx(struct AES_ctx* ctx, const uint8_t* key)
 {
   KeyExpansion(ctx->RoundKey, key);
 }
-#if (defined(CBC) && (CBC == 1)) || (defined(CTR) && (CTR == 1))
 void AES_init_ctx_iv(struct AES_ctx* ctx, const uint8_t* key, const uint8_t* iv)
 {
   KeyExpansion(ctx->RoundKey, key);
@@ -236,7 +215,6 @@ void AES_ctx_set_iv(struct AES_ctx* ctx, const uint8_t* iv)
 {
   memcpy (ctx->Iv, iv, AES_BLOCKLEN);
 }
-#endif
 
 // This function adds the round key to state.
 // The round key is added to the state by an XOR function.
@@ -322,6 +300,7 @@ static void MixColumns(state_t* state)
 // Note: The last call to xtime() is unneeded, but often ends up generating a smaller binary
 //       The compiler seems to be able to vectorize the operation better this way.
 //       See https://github.com/kokke/tiny-AES-c/pull/34
+#define MULTIPLY_AS_A_FUNCTION 1
 #if MULTIPLY_AS_A_FUNCTION
 static uint8_t Multiply(uint8_t x, uint8_t y)
 {
@@ -341,14 +320,17 @@ static uint8_t Multiply(uint8_t x, uint8_t y)
 
 #endif
 
-#if (defined(CBC) && CBC == 1) || (defined(ECB) && ECB == 1)
+
 // MixColumns function mixes the columns of the state matrix.
 // The method used to multiply may be difficult to understand for the inexperienced.
 // Please use the references to gain more information.
 static void InvMixColumns(state_t* state)
 {
   int i;
-  uint8_t a, b, c, d;
+  uint8_t a;
+  uint8_t b; 
+  uint8_t c;
+  uint8_t d;
   for (i = 0; i < 4; ++i)
   { 
     a = (*state)[i][0];
@@ -405,7 +387,6 @@ static void InvShiftRows(state_t* state)
   (*state)[2][3] = (*state)[3][3];
   (*state)[3][3] = temp;
 }
-#endif // #if (defined(CBC) && CBC == 1) || (defined(ECB) && ECB == 1)
 
 // Cipher is the main function that encrypts the PlainText.
 static void Cipher(state_t* state, uint8_t* RoundKey)
@@ -433,7 +414,7 @@ static void Cipher(state_t* state, uint8_t* RoundKey)
   AddRoundKey(Nr, state, RoundKey);
 }
 
-#if (defined(CBC) && CBC == 1) || (defined(ECB) && ECB == 1)
+
 static void InvCipher(state_t* state,uint8_t* RoundKey)
 {
   uint8_t round = 0;
@@ -458,36 +439,10 @@ static void InvCipher(state_t* state,uint8_t* RoundKey)
   InvSubBytes(state);
   AddRoundKey(0, state, RoundKey);
 }
-#endif // #if (defined(CBC) && CBC == 1) || (defined(ECB) && ECB == 1)
 
 /*****************************************************************************/
 /* Public functions:                                                         */
 /*****************************************************************************/
-#if defined(ECB) && (ECB == 1)
-
-
-void AES_ECB_encrypt(struct AES_ctx *ctx, uint8_t* buf)
-{
-  // The next function call encrypts the PlainText with the Key using AES algorithm.
-  Cipher((state_t*)buf, ctx->RoundKey);
-}
-
-void AES_ECB_decrypt(struct AES_ctx* ctx, uint8_t* buf)
-{
-  // The next function call decrypts the PlainText with the Key using AES algorithm.
-  InvCipher((state_t*)buf, ctx->RoundKey);
-}
-
-
-#endif // #if defined(ECB) && (ECB == 1)
-
-
-
-
-
-#if defined(CBC) && (CBC == 1)
-
-
 static void XorWithIv(uint8_t* buf, uint8_t* Iv)
 {
   uint8_t i;
@@ -499,7 +454,7 @@ static void XorWithIv(uint8_t* buf, uint8_t* Iv)
 
 void AES_CBC_encrypt_buffer(struct AES_ctx *ctx,uint8_t* buf, uint32_t length)
 {
-  uintptr_t i;
+  uint32_t i;
   uint8_t *Iv = ctx->Iv;
   for (i = 0; i < length; i += AES_BLOCKLEN)
   {
@@ -515,7 +470,7 @@ void AES_CBC_encrypt_buffer(struct AES_ctx *ctx,uint8_t* buf, uint32_t length)
 
 void AES_CBC_decrypt_buffer(struct AES_ctx* ctx, uint8_t* buf,  uint32_t length)
 {
-  uintptr_t i;
+  uint32_t i;
   uint8_t storeNextIv[AES_BLOCKLEN];
   for (i = 0; i < length; i += AES_BLOCKLEN)
   {
@@ -525,48 +480,83 @@ void AES_CBC_decrypt_buffer(struct AES_ctx* ctx, uint8_t* buf,  uint32_t length)
     memcpy(ctx->Iv, storeNextIv, AES_BLOCKLEN);
     buf += AES_BLOCKLEN;
   }
-
 }
+/********************************************************************
+ * the AES Secret Key (protect this information)
+ * the IV (initial value) used in the for the CBC mode of AES
+ * this IV should be randomized after test vector verification of
+ * cipher mathematics, The key may also be "randomized" using Nc
+ * *****************************************************************/
+#define AESKEY { 0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c }
+#define FIXEDIV { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f }
 
-#endif // #if defined(CBC) && (CBC == 1)
-
-
-
-#if defined(CTR) && (CTR == 1)
-
-/* Symmetrical operation: same function for encrypting as for decrypting. Note any IV/nonce should never be reused with the same key */
-void AES_CTR_xcrypt_buffer(struct AES_ctx* ctx, uint8_t* buf, uint32_t length)
+/********************************************************************
+ * encyrptHeaderData() performs AES encryption on an array of bytes
+ *  intended to be the trode header data.
+ * *****************************************************************/
+void encryptHeaderData(uint8_t *pHdrData, int len)
 {
-  uint8_t buffer[AES_BLOCKLEN];
-  
-  unsigned i;
-  int bi;
-  for (i = 0, bi = AES_BLOCKLEN; i < length; ++i, ++bi)
-  {
-    if (bi == AES_BLOCKLEN) /* we need to regen xor compliment in buffer */
-    {
-      
-      memcpy(buffer, ctx->Iv, AES_BLOCKLEN);
-      Cipher((state_t*)buffer,ctx->RoundKey);
+    // Generated Key on Stack
+    uint8_t key[AES_KEYLEN] = AESKEY;
+    struct AES_ctx ctx;
 
-      /* Increment Iv and handle overflow */
-      for (bi = (AES_BLOCKLEN - 1); bi >= 0; --bi)
-      {
-	/* inc will owerflow */
-        if (ctx->Iv[bi] == 255)
-	{
-          ctx->Iv[bi] = 0;
-          continue;
-        } 
-        ctx->Iv[bi] += 1;
-        break;   
-      }
-      bi = 0;
-    }
+    // Set the IV, should be random??, not strictly required for security
+    uint8_t iv[AES_BLOCKLEN]  = FIXEDIV;
+    AES_init_ctx_iv(&ctx, key, iv);
 
-    buf[i] = (buf[i] ^ buffer[bi]);
-  }
+    // Check Length, if not multiple of AES_BLOCKLEN, padding required
+    if(len%16==0)   // Encrypt Data
+        AES_CBC_encrypt_buffer(&ctx, pHdrData, len);
 }
 
-#endif // #if defined(CTR) && (CTR == 1)
+/********************************************************************
+ * decyrptHeaderData() performs AES decryption on an array of bytes
+ *  intended to be the trode header data.
+ * *****************************************************************/
+void decyptHeaderData(uint8_t *pHdrData, int len)
+{
+    // Generated Key on Stack
+    uint8_t key[AES_KEYLEN] = AESKEY;
+    struct AES_ctx ctx;
 
+    // Set the IV, should be random??, not strictly required for security
+    uint8_t iv[AES_BLOCKLEN]  = FIXEDIV;
+    AES_init_ctx_iv(&ctx, key, iv);
+
+    // Check Length, if not multiple of AES_BLOCKLEN, padding required
+    if(len%16==0)   // Decrypt Data
+        AES_CBC_decrypt_buffer(&ctx, pHdrData, 64);
+}
+
+/********************************************************************
+ * testAESFunction() can be used to verify the compiled mathematical
+ * validity of the AES Encryption, test vectors are used from NIST to
+ * calculated verifiable inputs and outputs of the encyrption / decryption
+ * process.  If through comparison an error is detected, The program
+ * will lock up in an infinite loop.  Otherwise, normal execution
+ * proceeds, the function returns.
+ * *****************************************************************/
+#ifdef TEST_AES_MATH
+    void testAESFunction(void)
+	{
+		// Load test buffer with plain text
+		memcpy(testbuffer, plaintext, 64);		
+		
+		// Encrypt test buffer
+		encryptHeaderData(testbuffer, 64);
+				
+		// Compare with Expected cipher text
+		if(0!=memcmp(testbuffer, ciphertext, 64))
+			while(1);	// lock up on error (obvious indication of failure)
+		
+		// Decrypt test buffer
+		decyptHeaderData(testbuffer, 64);
+		
+		// Compare with Expected plain text
+		if(0!=memcmp(testbuffer, plaintext, 64))
+			while(1);	// lock up on error (obvious indiction of failure)
+		
+		// Return
+        return;
+	}
+#endif
