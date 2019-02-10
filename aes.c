@@ -531,7 +531,7 @@ void decyptHeaderData(uint8_t *pHdrData, int len)
 /********************************************************************
  * testAESFunction() can be used to verify the compiled mathematical
  * validity of the AES Encryption, test vectors are used from NIST to
- * calculated verifiable inputs and outputs of the encyrption / decryption
+ * calculate verifiable inputs and outputs of the encyrption / decryption
  * process.  If through comparison an error is detected, The program
  * will lock up in an infinite loop.  Otherwise, normal execution
  * proceeds, the function returns.
