@@ -34,3 +34,9 @@ test_package/build
 *.exe
 *.out
 *.app
+/CMakeLists.txt
+/Makefile
+/conanfile.py
+/library.json
+/test_package/CMakeLists.txt
+/test_package/conanfile.py

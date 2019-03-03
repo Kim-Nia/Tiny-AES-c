@@ -45,17 +45,12 @@ NOTE:   String length must be evenly divisible by 16byte (str_len % 16 == 0)
 #define Nb 4
 #define Nk 4        // The number of 32 bit words in a key.
 #define Nr 10       // The number of rounds in AES Cipher.
-
+#define getSBoxValue(num) (sbox[(num)])
+#define getSBoxInvert(num) (rsbox[(num)])
 
 /*****************************************************************************/
 /* Private variables:                                                        */
 /*****************************************************************************/
-
-
-
-
-
-
 // The lookup-tables are marked const so they can be placed in read-only storage instead of RAM
 // The numbers below can be computed dynamically trading ROM for RAM - 
 // This can be useful in (embedded) bootloader applications, where ROM is often limited.
@@ -106,20 +101,24 @@ static const uint8_t Rcon[11] = {
 /*****************************************************************************/
 /* Private functions:                                                        */
 /*****************************************************************************/
-/*
-static uint8_t getSBoxValue(uint8_t num)
+
+// Multiply is used to multiply numbers in the field GF(2^8)
+// Note: The last call to xtime() is unneeded, but often ends up generating a smaller binary
+//       The compiler seems to be able to vectorize the operation better this way.
+//       See https://github.com/kokke/tiny-AES-c/pull/34
+static uint8_t xtime(uint8_t x)
 {
-  return sbox[num];
+  return ((x<<1) ^ (((x>>7) & 1) * 0x1b));
 }
-*/
-#define getSBoxValue(num) (sbox[(num)])
-/*
-static uint8_t getSBoxInvert(uint8_t num)
+static uint8_t Multiply(uint8_t x, uint8_t y)
 {
-  return rsbox[num];
+  return (((y & 1) * x) ^
+       ((y>>1 & 1) * xtime(x)) ^
+       ((y>>2 & 1) * xtime(xtime(x))) ^
+       ((y>>3 & 1) * xtime(xtime(xtime(x)))) ^
+       ((y>>4 & 1) * xtime(xtime(xtime(xtime(x)))))); /* this last call to xtime() can be omitted */
 }
-*/
-#define getSBoxInvert(num) (rsbox[(num)])
+
 
 // This function produces Nb(Nr+1) round keys. The round keys are used in each round to decrypt the states. 
 static void KeyExpansion(uint8_t* RoundKey, const uint8_t* Key)
@@ -257,10 +256,7 @@ static void ShiftRows(state_t* state)
   (*state)[1][3] = temp;
 }
 
-static uint8_t xtime(uint8_t x)
-{
-  return ((x<<1) ^ (((x>>7) & 1) * 0x1b));
-}
+
 
 // MixColumns function mixes the columns of the state matrix
 static void MixColumns(state_t* state)
@@ -278,29 +274,7 @@ static void MixColumns(state_t* state)
   }
 }
 
-// Multiply is used to multiply numbers in the field GF(2^8)
-// Note: The last call to xtime() is unneeded, but often ends up generating a smaller binary
-//       The compiler seems to be able to vectorize the operation better this way.
-//       See https://github.com/kokke/tiny-AES-c/pull/34
-#define MULTIPLY_AS_A_FUNCTION 1
-#if MULTIPLY_AS_A_FUNCTION
-static uint8_t Multiply(uint8_t x, uint8_t y)
-{
-  return (((y & 1) * x) ^
-       ((y>>1 & 1) * xtime(x)) ^
-       ((y>>2 & 1) * xtime(xtime(x))) ^
-       ((y>>3 & 1) * xtime(xtime(xtime(x)))) ^
-       ((y>>4 & 1) * xtime(xtime(xtime(xtime(x)))))); /* this last call to xtime() can be omitted */
-  }
-#else
-#define Multiply(x, y)                                \
-      (  ((y & 1) * x) ^                              \
-      ((y>>1 & 1) * xtime(x)) ^                       \
-      ((y>>2 & 1) * xtime(xtime(x))) ^                \
-      ((y>>3 & 1) * xtime(xtime(xtime(x)))) ^         \
-      ((y>>4 & 1) * xtime(xtime(xtime(xtime(x))))))   \
 
-#endif
 
 
 // MixColumns function mixes the columns of the state matrix.
@@ -464,101 +438,149 @@ void AES_CBC_decrypt_buffer(struct AES_ctx* ctx, uint8_t* buf,  uint32_t length)
   }
 }
 
-
-/********************************************************************
- * encyrptHeaderData() performs AES encryption on an array of bytes
- *  intended to be the trode header data.
- * *****************************************************************/
-void encryptHeaderData(uint8_t *pHdrData, int len)
-{
-    // Generated Key on Stack
-    uint8_t key[AES_KEYLEN] = AESKEY;
-    struct AES_ctx ctx;
-
-    // Set the IV, should be random??, not strictly required for security
-    uint8_t iv[AES_BLOCKLEN]  = FIXEDIV;
-    AES_init_ctx_iv(&ctx, key, iv);
-
-    // Check Length, if not multiple of AES_BLOCKLEN, padding required
-    if(len%16==0)   // Encrypt Data
-        AES_CBC_encrypt_buffer(&ctx, pHdrData, len);
-}
-
-/********************************************************************
- * decyrptHeaderData() performs AES decryption on an array of bytes
- *  intended to be the trode header data.
- * *****************************************************************/
-void decyptHeaderData(uint8_t *pHdrData, int len)
-{
-    // Generated Key on Stack
-    uint8_t key[AES_KEYLEN] = AESKEY;
-    struct AES_ctx ctx;
-
-    // Set the IV, should be random??, not strictly required for security
-    uint8_t iv[AES_BLOCKLEN]  = FIXEDIV;
-    AES_init_ctx_iv(&ctx, key, iv);
-
-    // Check Length, if not multiple of AES_BLOCKLEN, padding required
-    if(len%16==0)   // Decrypt Data
-        AES_CBC_decrypt_buffer(&ctx, pHdrData, 64);
-}
-
-
 #ifdef TEST_AES_MATH
-	/********************************************************************
-	 * the AES Secret Key (protect this information)
-	 * the IV (initial value) used in the for the CBC mode of AES
-	 * this IV should be randomized after test vector verification of
-	 * cipher mathematics, The key may also be "randomized" using Nc
-	 * *****************************************************************/
-	#define AESKEY { 0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c }
-	#define FIXEDIV { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f }
+    /********************************************************************
+     * the AES Secret Key (protect this information)
+     * the IV (initial value) used in the for the CBC mode of AES
+     * this IV should be randomized after test vector verification of
+     * cipher mathematics, The key may also be "randomized" using Nc
+     * *****************************************************************/
+    #define AESKEY { 0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c }
+    #define FIXEDIV { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f }
 
-  static const uint8_t plaintext[64] = {
-  //0     1    2      3     4    5     6     7      8    9     A      B    C     D     E     F
-  0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96, 0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a,
-  0xae, 0x2d, 0x8a, 0x57, 0x1e, 0x03, 0xac, 0x9c, 0x9e, 0xb7, 0x6f, 0xac, 0x45, 0xaf, 0x8e, 0x51,
-  0x30, 0xc8, 0x1c, 0x46, 0xa3, 0x5c, 0xe4, 0x11, 0xe5, 0xfb, 0xc1, 0x19, 0x1a, 0x0a, 0x52, 0xef,
-  0xf6, 0x9f, 0x24, 0x45, 0xdf, 0x4f, 0x9b, 0x17, 0xad, 0x2b, 0x41, 0x7b, 0xe6, 0x6c, 0x37, 0x10 };
-  
-  static const uint8_t ciphertext[64] = {
-  //0     1    2      3     4    5     6     7      8    9     A      B    C     D     E     F
-  0x76, 0x49, 0xab, 0xac, 0x81, 0x19, 0xb2, 0x46, 0xce, 0xe9, 0x8e, 0x9b, 0x12, 0xe9, 0x19, 0x7d,
-  0x50, 0x86, 0xcb, 0x9b, 0x50, 0x72, 0x19, 0xee, 0x95, 0xdb, 0x11, 0x3a, 0x91, 0x76, 0x78, 0xb2,
-  0x73, 0xbe, 0xd6, 0xb8, 0xe3, 0xc1, 0x74, 0x3b, 0x71, 0x16, 0xe6, 0x9e, 0x22, 0x22, 0x95, 0x16,
-  0x3f, 0xf1, 0xca, 0xa1, 0x68, 0x1f, 0xac, 0x09, 0x12, 0x0e, 0xca, 0x30, 0x75, 0x86, 0xe1, 0xa7 };
-  
-  
-  static uint8_t testbuffer[64] = {0};
-  
-  /********************************************************************
- * testAESFunction() can be used to verify the compiled mathematical
- * validity of the AES Encryption, test vectors are used from NIST to
- * calculate verifiable inputs and outputs of the encyrption / decryption
- * process.  If through comparison an error is detected, The program
- * will lock up in an infinite loop.  Otherwise, normal execution
- * proceeds, the function returns.
- * *****************************************************************/
-	void testAESFunction(void)
-	{
-		// Load test buffer with plain text
-		memcpy(testbuffer, plaintext, 64);		
-		
-		// Encrypt test buffer
-		encryptHeaderData(testbuffer, 64);
-				
-		// Compare with Expected cipher text
-		if(0!=memcmp(testbuffer, ciphertext, 64))
-			while(1);	// lock up on error (obvious indication of failure)
-		
-		// Decrypt test buffer
-		decyptHeaderData(testbuffer, 64);
-		
-		// Compare with Expected plain text
-		if(0!=memcmp(testbuffer, plaintext, 64))
-			while(1);	// lock up on error (obvious indiction of failure)
-		
-		// Return
+    static const uint8_t plaintext[64] = {
+    //0     1    2      3     4    5     6     7      8    9     A      B    C     D     E     F
+    0x6b, 0xc1, 0xbe, 0xe2, 0x2e, 0x40, 0x9f, 0x96, 0xe9, 0x3d, 0x7e, 0x11, 0x73, 0x93, 0x17, 0x2a,
+    0xae, 0x2d, 0x8a, 0x57, 0x1e, 0x03, 0xac, 0x9c, 0x9e, 0xb7, 0x6f, 0xac, 0x45, 0xaf, 0x8e, 0x51,
+    0x30, 0xc8, 0x1c, 0x46, 0xa3, 0x5c, 0xe4, 0x11, 0xe5, 0xfb, 0xc1, 0x19, 0x1a, 0x0a, 0x52, 0xef,
+    0xf6, 0x9f, 0x24, 0x45, 0xdf, 0x4f, 0x9b, 0x17, 0xad, 0x2b, 0x41, 0x7b, 0xe6, 0x6c, 0x37, 0x10 };
+
+    static const uint8_t ciphertext[64] = {
+    //0     1    2      3     4    5     6     7      8    9     A      B    C     D     E     F
+    0x76, 0x49, 0xab, 0xac, 0x81, 0x19, 0xb2, 0x46, 0xce, 0xe9, 0x8e, 0x9b, 0x12, 0xe9, 0x19, 0x7d,
+    0x50, 0x86, 0xcb, 0x9b, 0x50, 0x72, 0x19, 0xee, 0x95, 0xdb, 0x11, 0x3a, 0x91, 0x76, 0x78, 0xb2,
+    0x73, 0xbe, 0xd6, 0xb8, 0xe3, 0xc1, 0x74, 0x3b, 0x71, 0x16, 0xe6, 0x9e, 0x22, 0x22, 0x95, 0x16,
+    0x3f, 0xf1, 0xca, 0xa1, 0x68, 0x1f, 0xac, 0x09, 0x12, 0x0e, 0xca, 0x30, 0x75, 0x86, 0xe1, 0xa7 };
+
+
+    static uint8_t testbuffer[64] = {0};
+
+    /********************************************************************
+     * testAESFunction() can be used to verify the compiled mathematical
+     * validity of the AES Encryption, test vectors are used from NIST to
+     * calculate verifiable inputs and outputs of the encyrption / decryption
+     * process.  If through comparison an error is detected, The program
+     * will lock up in an infinite loop.  Otherwise, normal execution
+     * proceeds, the function returns.
+     * *****************************************************************/
+    void testAESFunction(void)
+    {
+        // Load test buffer with plain text
+        memcpy(testbuffer, plaintext, 64);
+
+        // Encrypt test buffer
+        encryptHeaderData(testbuffer, 64);
+
+        // Compare with Expected cipher text
+        if(0!=memcmp(testbuffer, ciphertext, 64))
+            while(1);	// lock up on error (obvious indication of failure)
+
+        // Decrypt test buffer
+        decyptHeaderData(testbuffer, 64);
+
+        // Compare with Expected plain text
+        if(0!=memcmp(testbuffer, plaintext, 64))
+            while(1);	// lock up on error (obvious indiction of failure)
+
+        // Return
         return;
-	}
+    }
 #endif
+
+
+/*******************************************************************
+ * generateKey() generates a secret key from the Sn and Ident code
+ *  of the connected trode.
+ * *****************************************************************/
+void generateKey(uint8_t *ptrKey)
+{
+
+
+}
+/*******************************************************************
+ * generateIV() generates a secret key from the Sn and Ident code
+ *  of the connected trode.
+ * *****************************************************************/
+void generateIV(uint8_t *ptrIV)
+{
+
+
+}
+
+/********************************************************************
+ * encyrptBufferData() performs AES encryption on an array of bytes
+ *  intended to be the trode header data.
+ * *****************************************************************/
+void encryptBufferData(uint8_t *pHdrData, int len)
+{
+    // Check Length, if not multiple of AES_BLOCKLEN, return
+    if(len%AES_BLOCKLEN==0)
+    {
+	// Allocate Stack Variables
+    struct AES_ctx ctx;
+    
+#ifdef TEST_AES_MATH
+    uint8_t key[AES_KEYLEN] = AESKEY;
+    uint8_t iv[AES_BLOCKLEN] = FIXEDIV;
+#else
+    uint8_t key[AES_KEYLEN];
+    uint8_t iv[AES_BLOCKLEN];
+
+    // Initialize key and IV
+    generateKey(&key);
+    generateIV(&iv);
+#endif
+
+    // Initialize the ctx structure with Key and IV
+    AES_init_ctx_iv(&ctx, key, iv);    
+    
+    // Execute Ecryption Cipher
+    AES_CBC_encrypt_buffer(&ctx, pHdrData, len);
+    }
+}
+
+/********************************************************************
+ * decyrptBufferData() performs AES decryption on an array of bytes
+ *  intended to be the trode header data.
+ * *****************************************************************/
+void decyptBufferData(uint8_t *pHdrData, int len)
+{    
+    // Check Length, if not multiple of AES_BLOCKLEN, return
+    if(len%AES_BLOCKLEN==0)
+    {
+	// Allocate Stack Variables
+    struct AES_ctx ctx;
+    
+#ifdef TEST_AES_MATH
+    uint8_t key[AES_KEYLEN] = AESKEY;
+    uint8_t iv[AES_BLOCKLEN] = FIXEDIV;
+#else
+    uint8_t key[AES_KEYLEN];
+    uint8_t iv[AES_BLOCKLEN];
+
+    // Initialize key and IV
+    generateKey(&key);
+    generateIV(&iv);
+#endif
+
+    // Initialize the ctx structure with Key and IV
+    AES_init_ctx_iv(&ctx, key, iv);
+
+    // Execute Decryption Cipher
+    AES_CBC_decrypt_buffer(&ctx, pHdrData, len);
+    }
+}
+
+
+
+

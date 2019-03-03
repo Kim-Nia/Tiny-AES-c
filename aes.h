@@ -4,7 +4,7 @@
 #include <stdio.h>
 
 // USE this to test the AES algorithm against the NIST test vectors
-#define TEST_AES_MATH
+//#define TEST_AES_MATH
 
 // USE this to run compile code for system with stdint.h
 #define AESLinked_STDINT
