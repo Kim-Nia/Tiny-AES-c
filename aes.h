@@ -8,7 +8,9 @@
 
 // USE this to run compile code for system with stdint.h
 #define AESLinked_STDINT
-
+#ifdef DERRMAPACECONSOLE
+#undef AESLinked_STDINT
+#endif
 #ifdef AESLinked_STDINT
 	// Some Data Types Used in AES.h and AES.c
 	#include <stdint.h>
