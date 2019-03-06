@@ -6,11 +6,7 @@
 // USE this to test the AES algorithm against the NIST test vectors
 //#define TEST_AES_MATH
 
-// USE this to run compile code for system with stdint.h
-#define AESLinked_STDINT
-#ifdef DERRMAPACECONSOLE
-#undef AESLinked_STDINT
-#endif
+// This is set in the APT.pro and CryptoLibTest.pro files
 #ifdef AESLinked_STDINT
 	// Some Data Types Used in AES.h and AES.c
 	#include <stdint.h>
