@@ -11,9 +11,6 @@
 	// Some Data Types Used in AES.h and AES.c
 	#include <stdint.h>
 #else
-	// Some Data Types Used in AES.h and AES.c
-	typedef unsigned char uint8_t;
-	typedef unsigned long uint32_t;
 #endif
 
 // state - array holding the intermediate results during decryption.
