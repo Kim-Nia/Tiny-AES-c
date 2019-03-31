@@ -2,6 +2,7 @@
 #define _AES_H_
 
 #include <stdio.h>
+#include <sanuwave_crf.h>
 
 // USE this to test the AES algorithm against the NIST test vectors
 //#define TEST_AES_MATH
