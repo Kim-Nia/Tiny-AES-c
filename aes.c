@@ -479,14 +479,14 @@ void AES_CBC_decrypt_buffer(struct AES_ctx* ctx, uint8_t* buf,  uint32_t length)
         memcpy(testbuffer, plaintext, 64);
 
         // Encrypt test buffer
-        encryptHeaderData(testbuffer, 64);
+        encryptBufferData(testbuffer, 64);
 
         // Compare with Expected cipher text
         if(0!=memcmp(testbuffer, ciphertext, 64))
             while(1);	// lock up on error (obvious indication of failure)
 
         // Decrypt test buffer
-        decyptHeaderData(testbuffer, 64);
+        decryptBufferData(testbuffer, 64);
 
         // Compare with Expected plain text
         if(0!=memcmp(testbuffer, plaintext, 64))
@@ -504,7 +504,11 @@ void AES_CBC_decrypt_buffer(struct AES_ctx* ctx, uint8_t* buf,  uint32_t length)
  * *****************************************************************/
 void generateKey(uint8_t *ptrKey)
 {
-
+    #define AESKEY { 0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c }
+    uint8_t key[AES_KEYLEN] = AESKEY;
+    int i;
+    for(i = 0; i< AES_KEYLEN; i++)
+        ptrKey[i] = key[i];
 
 }
 /*******************************************************************
@@ -513,8 +517,11 @@ void generateKey(uint8_t *ptrKey)
  * *****************************************************************/
 void generateIV(uint8_t *ptrIV)
 {
-
-
+    #define FIXEDIV { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f }
+    uint8_t iv[AES_BLOCKLEN] = FIXEDIV;
+    int i;
+    for( i = 0; i< AES_BLOCKLEN; i++)
+        ptrIV[i] = iv[i];
 }
 
 /********************************************************************
@@ -537,8 +544,8 @@ void encryptBufferData(uint8_t *pHdrData, int len)
     uint8_t iv[AES_BLOCKLEN];
 
     // Initialize key and IV
-    generateKey(&key);
-    generateIV(&iv);
+    generateKey((uint8_t*)&key);
+    generateIV((uint8_t*)&iv);
 #endif
 
     // Initialize the ctx structure with Key and IV
@@ -553,7 +560,7 @@ void encryptBufferData(uint8_t *pHdrData, int len)
  * decyrptBufferData() performs AES decryption on an array of bytes
  *  intended to be the trode header data.
  * *****************************************************************/
-void decyptBufferData(uint8_t *pHdrData, int len)
+void decryptBufferData(uint8_t *pHdrData, int len)
 {    
     // Check Length, if not multiple of AES_BLOCKLEN, return
     if(len%AES_BLOCKLEN==0)
@@ -569,8 +576,8 @@ void decyptBufferData(uint8_t *pHdrData, int len)
     uint8_t iv[AES_BLOCKLEN];
 
     // Initialize key and IV
-    generateKey(&key);
-    generateIV(&iv);
+    generateKey((uint8_t*)&key);
+    generateIV((uint8_t*)&iv);
 #endif
 
     // Initialize the ctx structure with Key and IV

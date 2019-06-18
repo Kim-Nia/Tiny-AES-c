@@ -18,8 +18,8 @@
 typedef uint8_t state_t[4][4];
 
 // Function Prototypes
-void encryptHeaderData(uint8_t *pHdrData, int len);
-void decyptHeaderData(uint8_t *pHdrData, int len);
+void encryptBufferData(uint8_t *pHdrData, int len);
+void decryptBufferData(uint8_t *pHdrData, int len);
 #ifdef TEST_AES_MATH
     void testAESFunction(void);
 #endif
