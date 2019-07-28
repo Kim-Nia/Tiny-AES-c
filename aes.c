@@ -499,8 +499,7 @@ void AES_CBC_decrypt_buffer(struct AES_ctx* ctx, uint8_t* buf,  uint32_t length)
 
 
 /*******************************************************************
- * generateKey() generates a secret key from the Sn and Ident code
- *  of the connected trode.
+ * generateKey() generates a secret key....
  * *****************************************************************/
 void generateKey(uint8_t *ptrKey)
 {
@@ -512,8 +511,7 @@ void generateKey(uint8_t *ptrKey)
 
 }
 /*******************************************************************
- * generateIV() generates a secret key from the Sn and Ident code
- *  of the connected trode.
+ * generateIV() generates a initial vector....
  * *****************************************************************/
 void generateIV(uint8_t *ptrIV)
 {
